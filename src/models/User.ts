@@ -15,7 +15,11 @@ export interface IUser extends Document {
   passwordResetToken?: string;
   passwordResetExpiry?: Date;
   techLevel?: 'beginner' | 'intermediate' | 'advanced';
+  skillLevel?: 'beginner' | 'intermediate' | 'advanced';
   onboardingComplete: boolean;
+  plan: 'free' | 'pro';
+  planActivatedAt?: Date;
+  planExpiresAt?: Date;
   xp: number;
   streak: number;
   level: number;
@@ -42,7 +46,11 @@ const UserSchema = new Schema<IUser>(
     passwordResetToken: { type: String },
     passwordResetExpiry: { type: Date },
     techLevel: { type: String, enum: ['beginner', 'intermediate', 'advanced'] },
+    skillLevel: { type: String, enum: ['beginner', 'intermediate', 'advanced'] },
     onboardingComplete: { type: Boolean, default: false },
+    plan: { type: String, enum: ['free', 'pro'], default: 'free' },
+    planActivatedAt: { type: Date },
+    planExpiresAt: { type: Date },
   },
   { timestamps: true }
 );

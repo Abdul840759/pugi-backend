@@ -65,6 +65,7 @@ const courseSchema = new mongoose.Schema(
       default: 'draft',
     },
     nextCourseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Course', default: null },
+    isPremium: { type: Boolean, default: false },
     modules: [moduleSchema],
   },
   { timestamps: true }

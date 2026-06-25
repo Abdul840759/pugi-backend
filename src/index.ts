@@ -11,6 +11,7 @@ import quizRoutes from './routes/quizzes';
 import certificateRoutes from './routes/certificates';
 import roadmapRoutes from './routes/roadmaps';
 import youtubeRoutes from './routes/youtube';
+import planRoutes from './routes/plans';
 import { errorHandler } from './middleware/errorHandler';
 import passport from 'passport';
 import { setupGoogleAuth } from './utils/googleAuth';
@@ -36,6 +37,7 @@ app.use('/api/quizzes', quizRoutes);
 app.use('/api/certificates', certificateRoutes);
 app.use('/api/roadmaps', roadmapRoutes);
 app.use('/api/youtube', youtubeRoutes);
+app.use('/api/plans', planRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date() }));

@@ -2,22 +2,32 @@ import { Router, Response } from 'express';
 import { Course } from '../models/Course';
 import { Enrollment } from '../models/Enrollment';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
+import User from '../models/User';
 
 const router = Router();
 
-// GET /api/courses — all published courses (with optional search/filter)
+const levelOrder = ['beginner', 'intermediate', 'advanced'];
+
+// GET /api/courses — all published courses filtered by skill level
 router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { search, category, level, minLevel } = req.query;
     const query: any = { status: 'published' };
-    const levelOrder = ['beginner', 'intermediate', 'advanced'];
 
     if (search) query.title = { $regex: search, $options: 'i' };
     if (category) query.category = category;
-    if (level) query.level = level;
-    if (minLevel && levelOrder.includes(minLevel as string)) {
+    if (level) {
+      query.level = level;
+    } else if (minLevel && levelOrder.includes(minLevel as string)) {
       const idx = levelOrder.indexOf(minLevel as string);
       query.level = { $in: levelOrder.slice(idx) };
+    } else if (req.user!.role === 'learner') {
+      const user = await User.findById(req.user!.id);
+      const userLevel = user?.skillLevel || user?.techLevel;
+      if (userLevel) {
+        const idx = levelOrder.indexOf(userLevel);
+        query.level = { $in: levelOrder.slice(idx) };
+      }
     }
 
     const courses = await Course.find(query).sort({ createdAt: -1 });
@@ -73,7 +83,6 @@ router.post('/', authenticate, authorize('tutor'), async (req: AuthRequest, res:
   try {
     const { title, description, category, level, thumbnail, duration, modules, status } = req.body;
     if (!title) return res.status(400).json({ message: 'Title is required' });
-
     const course = await Course.create({
       title,
       description,
@@ -86,7 +95,6 @@ router.post('/', authenticate, authorize('tutor'), async (req: AuthRequest, res:
       instructorId: req.user!.id,
       status: status === 'draft' ? 'draft' : 'pending',
     });
-
     return res.status(201).json(course);
   } catch (err) {
     return res.status(500).json({ message: 'Server error', error: err });
@@ -98,12 +106,10 @@ router.patch('/:id', authenticate, authorize('tutor'), async (req: AuthRequest, 
   try {
     const course = await Course.findOne({ _id: req.params.id, instructorId: req.user!.id });
     if (!course) return res.status(404).json({ message: 'Course not found or unauthorized' });
-
-    const allowed = ['title', 'description', 'category', 'level', 'thumbnail', 'duration', 'modules'];
+    const allowed = ['title', 'description', 'category', 'level', 'thumbnail', 'duration', 'modules', 'isPremium'];
     allowed.forEach((key) => {
       if (req.body[key] !== undefined) (course as any)[key] = req.body[key];
     });
-
     await course.save();
     return res.json(course);
   } catch (err) {
@@ -111,21 +117,19 @@ router.patch('/:id', authenticate, authorize('tutor'), async (req: AuthRequest, 
   }
 });
 
-// PATCH /api/courses/:id/status — set course status (tutor draft/publish)
+// PATCH /api/courses/:id/status — set course status (tutor)
 router.patch('/:id/status', authenticate, authorize('tutor'), async (req: AuthRequest, res: Response) => {
   try {
     const { status } = req.body;
     if (!['draft', 'pending'].includes(status)) {
       return res.status(400).json({ message: 'Status must be draft or pending' });
     }
-
     const course = await Course.findOneAndUpdate(
       { _id: req.params.id, instructorId: req.user!.id },
       { status },
       { new: true }
     );
     if (!course) return res.status(404).json({ message: 'Course not found or unauthorized' });
-
     return res.json(course);
   } catch (err) {
     return res.status(500).json({ message: 'Server error', error: err });
@@ -139,10 +143,8 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       req.user!.role === 'admin'
         ? { _id: req.params.id }
         : { _id: req.params.id, instructorId: req.user!.id };
-
     const course = await Course.findOneAndDelete(filter);
     if (!course) return res.status(404).json({ message: 'Course not found or unauthorized' });
-
     return res.json({ message: 'Course deleted successfully' });
   } catch (err) {
     return res.status(500).json({ message: 'Server error', error: err });
@@ -159,6 +161,29 @@ router.post('/:id/enroll', authenticate, authorize('learner'), async (req: AuthR
       (studentId: any) => studentId.toString() === req.user!.id
     );
     if (alreadyEnrolled) return res.status(400).json({ message: 'Already enrolled' });
+
+    const user = await User.findById(req.user!.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Free plan: max 1 enrollment
+    if (user.plan === 'free') {
+      const enrollmentCount = await Enrollment.countDocuments({ userId: req.user!.id });
+      if (enrollmentCount >= 1) {
+        return res.status(403).json({
+          message: 'Free plan allows only 1 course enrollment. Upgrade to PUGI Pro for unlimited access.',
+          code: 'FREE_PLAN_LIMIT',
+        });
+      }
+
+      // Free plan: course must match user's skill level
+      const userLevel = user.skillLevel || user.techLevel;
+      if (userLevel && course.level !== userLevel) {
+        return res.status(403).json({
+          message: `Your skill level is ${userLevel}. You can only enroll in ${userLevel} courses on the free plan.`,
+          code: 'LEVEL_MISMATCH',
+        });
+      }
+    }
 
     await Promise.all([
       Course.findByIdAndUpdate(req.params.id, {
@@ -184,15 +209,48 @@ router.patch('/:id/moderate', authenticate, authorize('admin'), async (req: Auth
     const { action } = req.body;
     if (!['approve', 'reject'].includes(action))
       return res.status(400).json({ message: 'Invalid action' });
-
     const course = await Course.findByIdAndUpdate(
       req.params.id,
       { status: action === 'approve' ? 'published' : 'rejected' },
       { new: true }
     );
     if (!course) return res.status(404).json({ message: 'Course not found' });
-
     return res.json({ message: `Course ${action}d`, course });
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error', error: err });
+  }
+});
+
+// PATCH /api/courses/:id/set-premium — admin toggles isPremium
+router.patch('/:id/set-premium', authenticate, authorize('admin'), async (req: AuthRequest, res: Response) => {
+  try {
+    const { isPremium } = req.body;
+    const course = await Course.findByIdAndUpdate(
+      req.params.id,
+      { isPremium: !!isPremium },
+      { new: true }
+    );
+    if (!course) return res.status(404).json({ message: 'Course not found' });
+    return res.json({ message: 'Course updated', course });
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error', error: err });
+  }
+});
+
+// PATCH /api/courses/:id/admin-set-level — admin overrides user skill level
+router.patch('/admin/user/:userId/set-level', authenticate, authorize('admin'), async (req: AuthRequest, res: Response) => {
+  try {
+    const { skillLevel } = req.body;
+    if (!levelOrder.includes(skillLevel)) {
+      return res.status(400).json({ message: 'Invalid skill level' });
+    }
+    const user = await User.findByIdAndUpdate(
+      req.params.userId,
+      { skillLevel },
+      { new: true }
+    );
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    return res.json({ message: 'Skill level updated', user });
   } catch (err) {
     return res.status(500).json({ message: 'Server error', error: err });
   }
