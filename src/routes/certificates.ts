@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import PDFDocument from 'pdfkit';
 import { Router, Response } from 'express';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { Certificate } from '../models/Certificate';
@@ -8,38 +9,57 @@ import User from '../models/User';
 
 const router = Router();
 
-const escapePdfText = (value: string) => value.replace(/[\\()]/g, '\\$&');
+const buildCertificatePdf = (certificate: any): Promise<Buffer> => {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 0 });
+    const chunks: Buffer[] = [];
+    doc.on('data', (chunk) => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
 
-const buildCertificatePdf = (certificate: any) => {
-  const lines = [
-    'PUGI Certificate of Completion',
-    `This certifies that ${certificate.studentName}`,
-    `completed ${certificate.courseTitle}`,
-    `Instructor: ${certificate.instructorName || 'PUGI'}`,
-    `Issued: ${new Date(certificate.issuedAt).toLocaleDateString()}`,
-    `Verification: ${certificate.verificationCode}`,
-  ];
-  const text = lines.map((line, index) => `BT /F1 ${index === 0 ? 24 : 14} Tf 72 ${720 - index * 42} Td (${escapePdfText(line)}) Tj ET`).join('\n');
-  const objects = [
-    '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
-    '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
-    '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj',
-    '4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
-    `5 0 obj << /Length ${Buffer.byteLength(text)} >> stream\n${text}\nendstream endobj`,
-  ];
-  let pdf = '%PDF-1.4\n';
-  const offsets = [0];
-  for (const object of objects) {
-    offsets.push(Buffer.byteLength(pdf));
-    pdf += `${object}\n`;
-  }
-  const xrefOffset = Buffer.byteLength(pdf);
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  offsets.slice(1).forEach((offset) => {
-    pdf += `${offset.toString().padStart(10, '0')} 00000 n \n`;
+    const width = doc.page.width;
+    const height = doc.page.height;
+
+    // Outer border
+    doc.lineWidth(4).strokeColor('#1d4ed8')
+      .rect(24, 24, width - 48, height - 48).stroke();
+    doc.lineWidth(1).strokeColor('#93c5fd')
+      .rect(40, 40, width - 80, height - 80).stroke();
+
+    doc.fillColor('#1d4ed8')
+      .font('Helvetica-Bold').fontSize(34)
+      .text('Certificate of Completion', 0, 100, { align: 'center' });
+
+    doc.fillColor('#374151')
+      .font('Helvetica').fontSize(14)
+      .text('This certifies that', 0, 170, { align: 'center' });
+
+    doc.fillColor('#111827')
+      .font('Helvetica-Bold').fontSize(28)
+      .text(certificate.studentName, 0, 195, { align: 'center' });
+
+    doc.fillColor('#374151')
+      .font('Helvetica').fontSize(14)
+      .text('has successfully completed the course', 0, 240, { align: 'center' });
+
+    doc.fillColor('#1d4ed8')
+      .font('Helvetica-Bold').fontSize(20)
+      .text(certificate.courseTitle, 0, 265, { align: 'center' });
+
+    const issuedDate = new Date(certificate.issuedAt).toLocaleDateString('en-US', {
+      year: 'numeric', month: 'long', day: 'numeric',
+    });
+
+    doc.fillColor('#6b7280')
+      .font('Helvetica').fontSize(12)
+      .text(`Issued by ${certificate.instructorName || 'PUGI'} on ${issuedDate}`, 0, 320, { align: 'center' });
+
+    doc.fillColor('#6b7280')
+      .font('Helvetica').fontSize(10)
+      .text(`Verification Code: ${certificate.verificationCode}`, 0, height - 70, { align: 'center' });
+
+    doc.end();
   });
-  pdf += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-  return Buffer.from(pdf);
 };
 
 router.post('/:courseId/issue', authenticate, authorize('learner'), async (req: AuthRequest, res: Response) => {

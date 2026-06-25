@@ -72,10 +72,12 @@ router.post('/complete-lesson', authenticate, authorize('learner'), async (req: 
       });
     }
 
-    const alreadyDone = enrollment.completedLessons.includes(lessonId);
+    const alreadyDone = enrollment.completedLessons.map(String).includes(String(lessonId));
     if (!alreadyDone) {
       enrollment.completedLessons.push(lessonId);
     }
+    // Always deduplicate before calculating progress
+    enrollment.completedLessons = [...new Set(enrollment.completedLessons.map(String))];
     enrollment.progress = totalLessons > 0
       ? Math.round((enrollment.completedLessons.length / totalLessons) * 100)
       : 0;
@@ -120,6 +122,37 @@ router.post('/complete-lesson', authenticate, authorize('learner'), async (req: 
       progress: enrollment.progress,
       completedLessons: enrollment.completedLessons,
       newBadges,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error', error: err });
+  }
+});
+
+// POST /api/progress/uncomplete-lesson
+router.post('/uncomplete-lesson', authenticate, authorize('learner'), async (req: AuthRequest, res: Response) => {
+  try {
+    const { courseId, lessonId } = req.body;
+    if (!courseId || !lessonId)
+      return res.status(400).json({ message: 'courseId and lessonId are required' });
+    const course = await Course.findById(courseId);
+    if (!course) return res.status(404).json({ message: 'Course not found' });
+    const totalLessons = course.modules.reduce(
+      (acc: number, mod: any) => acc + (mod.lessons?.length || 0), 0
+    );
+    const enrollment = await Enrollment.findOne({ userId: req.user!.id, courseId });
+    if (!enrollment) {
+      return res.json({ progress: 0, completedLessons: [] });
+    }
+    enrollment.completedLessons = enrollment.completedLessons.filter(
+      (lid: string) => lid !== lessonId
+    );
+    enrollment.progress = totalLessons > 0
+      ? Math.round((enrollment.completedLessons.length / totalLessons) * 100)
+      : 0;
+    await enrollment.save();
+    return res.json({
+      progress: enrollment.progress,
+      completedLessons: enrollment.completedLessons,
     });
   } catch (err) {
     return res.status(500).json({ message: 'Server error', error: err });
@@ -387,6 +420,35 @@ router.get('/learner/live-classes/search', authenticate, authorize('learner'), a
       students: c.students,
       status: c.status,
     })));
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error', error: err });
+  }
+});
+
+
+// GET /api/progress/leaderboard
+router.get('/leaderboard', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const week = new Date();
+    week.setDate(week.getDate() - 7);
+
+    const learners = await User.find({ role: 'learner' })
+      .select('name email avatar xp streak level')
+      .sort({ xp: -1 })
+      .limit(20);
+
+    const leaderboard = learners.map((user, index) => ({
+      rank:   index + 1,
+      id:     user._id,
+      name:   user.name,
+      email:  user.email,
+      avatar: user.avatar,
+      xp:     user.xp || 0,
+      streak: user.streak || 0,
+      level:  Math.floor((user.xp || 0) / 500) + 1,
+    }));
+
+    return res.json(leaderboard);
   } catch (err) {
     return res.status(500).json({ message: 'Server error', error: err });
   }

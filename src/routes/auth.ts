@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import passport from 'passport';
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt, { SignOptions } from 'jsonwebtoken';
@@ -21,6 +22,8 @@ const publicUser = (user: IUser) => ({
   email: user.email,
   role: user.role,
   avatar: user.avatar,
+  techLevel: user.techLevel,
+  onboardingComplete: user.onboardingComplete,
 });
 
 const signAccess = (id: string, role: string) =>
@@ -194,6 +197,23 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
+router.post('/onboarding', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { techLevel } = req.body;
+    if (!['beginner', 'intermediate', 'advanced'].includes(techLevel)) {
+      return res.status(400).json({ message: 'Invalid tech level' });
+    }
+    const user = await User.findByIdAndUpdate(
+      req.user!.id,
+      { techLevel, onboardingComplete: true },
+      { new: true }
+    );
+    return res.json({ techLevel: user?.techLevel, onboardingComplete: user?.onboardingComplete });
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error', error: err });
+  }
+});
+
 router.post('/forgot-password', async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
@@ -242,5 +262,40 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     return res.status(500).json({ message: 'Server error', error: err });
   }
 });
+
+// Google OAuth routes
+
+router.get('/google',
+  passport.authenticate('google', { scope: ['profile', 'email'], session: false })
+);
+
+router.get('/google/callback',
+  passport.authenticate('google', { session: false, failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=google_failed` }),
+  async (req: any, res) => {
+    try {
+      const user = req.user as any;
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+      // New user — issue tokens and send to onboarding
+      if (user.isNewUser) {
+        const accessToken = signAccess(user.id, user.role);
+        const refreshToken = signRefresh(user.id);
+        user.refreshTokenHash = await hashValue(refreshToken);
+        await user.save();
+        return res.redirect(`${frontendUrl}/auth/google/success?accessToken=${accessToken}&refreshToken=${refreshToken}&userId=${user.id}&name=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}&role=${user.role}&avatar=${encodeURIComponent(user.avatar || '')}&onboardingComplete=false`);
+      }
+
+      // Existing user — issue tokens and proceed
+      const accessToken = signAccess(user.id, user.role);
+      const refreshToken = signRefresh(user.id);
+      user.refreshTokenHash = await hashValue(refreshToken);
+      await user.save();
+
+      res.redirect(`${frontendUrl}/auth/google/success?accessToken=${accessToken}&refreshToken=${refreshToken}&userId=${user.id}&name=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}&role=${user.role}&avatar=${encodeURIComponent(user.avatar || '')}&onboardingComplete=${user.onboardingComplete ? 'true' : 'false'}`);
+    } catch (err) {
+      res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=google_failed`);
+    }
+  }
+);
 
 export default router;

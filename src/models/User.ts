@@ -14,6 +14,11 @@ export interface IUser extends Document {
   refreshTokenHash?: string;
   passwordResetToken?: string;
   passwordResetExpiry?: Date;
+  techLevel?: 'beginner' | 'intermediate' | 'advanced';
+  onboardingComplete: boolean;
+  xp: number;
+  streak: number;
+  level: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -24,6 +29,9 @@ const UserSchema = new Schema<IUser>(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true },
     role: { type: String, enum: ['learner', 'tutor', 'admin'], default: 'learner' },
+    xp: { type: Number, default: 0 },
+    streak: { type: Number, default: 0 },
+    level: { type: Number, default: 1 },
     avatar: { type: String },
     approved: { type: Boolean, default: false },
     emailVerified: { type: Boolean, default: false },
@@ -33,6 +41,8 @@ const UserSchema = new Schema<IUser>(
     refreshTokenHash: { type: String },
     passwordResetToken: { type: String },
     passwordResetExpiry: { type: Date },
+    techLevel: { type: String, enum: ['beginner', 'intermediate', 'advanced'] },
+    onboardingComplete: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

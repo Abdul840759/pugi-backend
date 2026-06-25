@@ -89,4 +89,60 @@ router.get('/history/me', authenticate, authorize('learner'), async (req: AuthRe
   }
 });
 
+
+// POST /api/quizzes/generate — AI quiz generator
+router.post('/generate', authenticate, authorize('learner'), async (req: AuthRequest, res: Response) => {
+  try {
+    const { lessonContent, lessonTitle, count } = req.body;
+    const questionCount = Math.max(5, Math.min(20, Number(count) || 5));
+    if (!lessonContent) return res.status(400).json({ message: 'lessonContent is required' });
+
+    const prompt = `You are a quiz generator for an online learning platform called PUGI.
+
+Based on the following lesson content, generate exactly ${questionCount} multiple choice questions.
+
+Lesson Title: ${lessonTitle || 'Programming Lesson'}
+
+Lesson Content:
+${lessonContent.slice(0, 3000)}
+
+Return ONLY a valid JSON array with exactly ${questionCount} objects. Each object must have:
+- "prompt": the question text
+- "options": array of exactly 4 answer strings
+- "correctOptionIndex": number 0-3 indicating correct answer
+- "explanation": brief explanation of why that answer is correct
+
+Return only the JSON array, no markdown, no extra text.`;
+
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY || ''}`,
+        'Connection': 'keep-alive',
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    const data: any = await response.json();
+    const text = data.choices?.[0]?.message?.content || '';
+
+    let questions;
+    try {
+      const cleaned = text.replace(/```json|```/g, '').trim();
+      questions = JSON.parse(cleaned);
+    } catch {
+      return res.status(500).json({ message: 'Failed to parse AI response' });
+    }
+
+    return res.json({ questions, lessonTitle });
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error', error: err });
+  }
+});
+
 export default router;

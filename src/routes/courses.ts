@@ -8,12 +8,17 @@ const router = Router();
 // GET /api/courses — all published courses (with optional search/filter)
 router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { search, category, level } = req.query;
+    const { search, category, level, minLevel } = req.query;
     const query: any = { status: 'published' };
+    const levelOrder = ['beginner', 'intermediate', 'advanced'];
 
     if (search) query.title = { $regex: search, $options: 'i' };
     if (category) query.category = category;
     if (level) query.level = level;
+    if (minLevel && levelOrder.includes(minLevel as string)) {
+      const idx = levelOrder.indexOf(minLevel as string);
+      query.level = { $in: levelOrder.slice(idx) };
+    }
 
     const courses = await Course.find(query).sort({ createdAt: -1 });
     return res.json(courses);

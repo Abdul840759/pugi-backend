@@ -64,6 +64,7 @@ const courseSchema = new mongoose.Schema(
       enum: ['draft', 'pending', 'published', 'rejected'],
       default: 'draft',
     },
+    nextCourseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Course', default: null },
     modules: [moduleSchema],
   },
   { timestamps: true }
