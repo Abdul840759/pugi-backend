@@ -1,5 +1,4 @@
 import mongoose, { Document, Schema } from 'mongoose';
-
 export interface IUser extends Document {
   name: string;
   email: string;
@@ -20,13 +19,14 @@ export interface IUser extends Document {
   plan: 'free' | 'pro';
   planActivatedAt?: Date;
   planExpiresAt?: Date;
+  adminPinFailCount?: number;
+  adminPinLockedUntil?: Date;
   xp: number;
   streak: number;
   level: number;
   createdAt: Date;
   updatedAt: Date;
 }
-
 const UserSchema = new Schema<IUser>(
   {
     name: { type: String, required: true, trim: true },
@@ -51,8 +51,9 @@ const UserSchema = new Schema<IUser>(
     plan: { type: String, enum: ['free', 'pro'], default: 'free' },
     planActivatedAt: { type: Date },
     planExpiresAt: { type: Date },
+    adminPinFailCount: { type: Number, default: 0 },
+    adminPinLockedUntil: { type: Date },
   },
   { timestamps: true }
 );
-
 export default mongoose.model<IUser>('User', UserSchema);

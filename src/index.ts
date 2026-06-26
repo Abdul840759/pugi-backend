@@ -13,6 +13,7 @@ import roadmapRoutes from './routes/roadmaps';
 import liveClassRoutes from './routes/liveClasses';
 import youtubeRoutes from './routes/youtube';
 import planRoutes from './routes/plans';
+import adminRoutes from './routes/admin';
 import { errorHandler } from './middleware/errorHandler';
 import passport from 'passport';
 import { setupGoogleAuth } from './utils/googleAuth';
@@ -40,6 +41,7 @@ app.use('/api/roadmaps', roadmapRoutes);
 app.use('/api/live-classes', liveClassRoutes);
 app.use('/api/youtube', youtubeRoutes);
 app.use('/api/plans', planRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date() }));
