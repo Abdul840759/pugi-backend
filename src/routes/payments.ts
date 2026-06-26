@@ -11,7 +11,7 @@ const BANK_DETAILS = {
   accountName: process.env.PUGI_BANK_ACCOUNT_NAME || 'PUGI LMS',
   bankName: process.env.PUGI_BANK_NAME || 'Sample Bank',
   accountNumber: process.env.PUGI_BANK_ACCOUNT_NUMBER || '0000000000',
-  amount: Number(process.env.PUGI_PRO_PRICE || 5000),
+  amount: Number(process.env.PUGI_PRO_PRICE || 2500),
   currency: 'NGN',
 };
 
