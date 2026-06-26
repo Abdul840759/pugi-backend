@@ -13,6 +13,7 @@ const BANK_DETAILS = {
   accountNumber: process.env.PUGI_BANK_ACCOUNT_NUMBER || '0000000000',
   amount: Number(process.env.PUGI_PRO_PRICE || 2500),
   currency: 'NGN',
+  note: process.env.PUGI_BANK_NOTE || 'Payments are temporarily processed manually to this PUGI admin account while we finalize our automated payment integration. Your upgrade will be activated within 24 hours of verification.',
 };
 
 // GET /api/payments/bank-details
