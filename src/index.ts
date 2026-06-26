@@ -10,6 +10,7 @@ import messageRoutes from './routes/messages';
 import quizRoutes from './routes/quizzes';
 import certificateRoutes from './routes/certificates';
 import roadmapRoutes from './routes/roadmaps';
+import liveClassRoutes from './routes/liveClasses';
 import youtubeRoutes from './routes/youtube';
 import planRoutes from './routes/plans';
 import { errorHandler } from './middleware/errorHandler';
@@ -36,6 +37,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/quizzes', quizRoutes);
 app.use('/api/certificates', certificateRoutes);
 app.use('/api/roadmaps', roadmapRoutes);
+app.use('/api/live-classes', liveClassRoutes);
 app.use('/api/youtube', youtubeRoutes);
 app.use('/api/plans', planRoutes);
 
