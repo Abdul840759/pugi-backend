@@ -28,11 +28,6 @@ router.get('/check', authenticate, async (req: AuthRequest, res: Response) => {
       return res.json({ eligible: false });
     }
 
-    if (user.role !== 'admin') {
-      user.role = 'admin';
-      await user.save();
-    }
-
     return res.json({ eligible: true });
   } catch (err) {
     return res.status(500).json({ message: 'Server error', error: err });
