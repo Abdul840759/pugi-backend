@@ -1,5 +1,3 @@
-import nodemailer from 'nodemailer';
-
 interface MailOptions {
   to: string;
   subject: string;
@@ -7,36 +5,36 @@ interface MailOptions {
   html?: string;
 }
 
-const hasSmtpConfig = () => Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
-
-const createTransporter = () => {
-  if (!hasSmtpConfig()) return null;
-
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-    connectionTimeout: 10000, // 10s to establish connection
-    greetingTimeout: 10000,   // 10s for SMTP greeting
-    socketTimeout: 15000,     // 15s of inactivity before killing socket
-    family: 4,                // force IPv4 - Render's network can't route Gmail's IPv6 SMTP address
-  } as any);
-};
+const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
+const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME || 'PUGI-LMS';
+const MAIL_FROM_EMAIL = process.env.MAIL_FROM_EMAIL || 'no-reply@pugi.local';
 
 export async function sendMail({ to, subject, text, html }: MailOptions) {
-  const transporter = createTransporter();
-  const from = process.env.MAIL_FROM || 'PUGI <no-reply@pugi.local>';
-
-  if (!transporter) {
+  if (!BREVO_API_KEY) {
     console.log(`\n[MAILER:DEV]\nTo: ${to}\nSubject: ${subject}\n${text}\n`);
     return;
   }
 
-  await transporter.sendMail({ from, to, subject, text, html });
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'api-key': BREVO_API_KEY,
+    },
+    body: JSON.stringify({
+      sender: { name: MAIL_FROM_NAME, email: MAIL_FROM_EMAIL },
+      to: [{ email: to }],
+      subject,
+      textContent: text,
+      htmlContent: html || `<p>${text}</p>`,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Brevo send failed: ${response.status} ${errorBody}`);
+  }
 }
 
 export async function sendOtpEmail(email: string, otp: string) {
