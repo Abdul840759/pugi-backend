@@ -82,7 +82,8 @@ router.post('/register', async (req: Request, res: Response) => {
       email: user.email,
     });
   } catch (err) {
-    return res.status(500).json({ message: 'Server error', error: err });
+    console.error('REGISTER ERROR:', err);
+    return res.status(500).json({ message: 'Server error', error: String(err) });
   }
 });
 
@@ -98,7 +99,8 @@ router.post('/resend-otp', async (req: Request, res: Response) => {
     await issueOtp(user);
     return res.json({ message: 'A new verification code has been sent.', email: user.email });
   } catch (err) {
-    return res.status(500).json({ message: 'Server error', error: err });
+    console.error('RESEND OTP ERROR:', err);
+    return res.status(500).json({ message: 'Server error', error: String(err) });
   }
 });
 
