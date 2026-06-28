@@ -23,7 +23,8 @@ const createTransporter = () => {
     connectionTimeout: 10000, // 10s to establish connection
     greetingTimeout: 10000,   // 10s for SMTP greeting
     socketTimeout: 15000,     // 15s of inactivity before killing socket
-  });
+    family: 4,                // force IPv4 - Render's network can't route Gmail's IPv6 SMTP address
+  } as any);
 };
 
 export async function sendMail({ to, subject, text, html }: MailOptions) {
