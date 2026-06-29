@@ -167,6 +167,8 @@ router.get('/course/:courseId', authenticate, async (req: AuthRequest, res: Resp
       courseId: req.params.courseId,
     });
     if (!enrollment) return res.json({ completedLessons: [], progress: 0 });
+    enrollment.lastAccessed = new Date();
+    await enrollment.save();
     return res.json({
       completedLessons: enrollment.completedLessons,
       progress: enrollment.progress,
