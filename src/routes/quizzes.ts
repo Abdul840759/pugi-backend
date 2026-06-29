@@ -133,9 +133,16 @@ Return only the JSON array, no markdown, no extra text.`;
 
     let questions;
     try {
-      const cleaned = text.replace(/```json|```/g, '').trim();
+      // Strip markdown fences and extract JSON array
+      let cleaned = text.replace(/```json|```/g, '').trim();
+      // Find the first [ and last ] to extract just the array
+      const start = cleaned.indexOf('[');
+      const end = cleaned.lastIndexOf(']');
+      if (start === -1 || end === -1) throw new Error('No JSON array found');
+      cleaned = cleaned.slice(start, end + 1);
       questions = JSON.parse(cleaned);
-    } catch {
+    } catch (parseErr) {
+      console.error('Quiz parse error:', parseErr, 'Raw text:', text);
       return res.status(500).json({ message: 'Failed to parse AI response' });
     }
 
