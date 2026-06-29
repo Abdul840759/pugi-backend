@@ -103,7 +103,7 @@ Return only the JSON array, no markdown, no extra text.`;
         'X-Title': 'PUGI LMS',
       },
       body: JSON.stringify({
-        model: 'meta-llama/llama-3.1-8b-instruct:free',
+        model: 'openrouter/auto',
         max_tokens: 8000,
         messages: [{ role: 'user', content: prompt }],
       }),
