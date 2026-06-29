@@ -77,6 +77,27 @@ router.get('/history/me', authenticate, authorize('learner'), async (req: AuthRe
     return res.status(500).json({ message: 'Server error', error: err });
   }
 });
+const generateWithGroq = async (prompt: string, maxTokens: number) => {
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY || ''}` },
+    body: JSON.stringify({ model: 'llama-3.3-70b-versatile', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+  });
+  const data: any = await res.json();
+  if (data.error?.code === 'rate_limit_exceeded') return null;
+  if (data.error) throw new Error(data.error.message);
+  return data.choices?.[0]?.message?.content || '';
+};
+const generateWithOpenRouter = async (prompt: string, maxTokens: number) => {
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY || ''}`, 'HTTP-Referer': 'https://pugi-lms.vercel.app', 'X-Title': 'PUGI LMS' },
+    body: JSON.stringify({ model: 'openrouter/auto', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+  });
+  const data: any = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  return data.choices?.[0]?.message?.content || '';
+};
 router.post('/generate', authenticate, authorize('learner'), async (req: AuthRequest, res: Response) => {
   try {
     const { lessonContent, lessonTitle, count } = req.body;
@@ -86,41 +107,34 @@ router.post('/generate', authenticate, authorize('learner'), async (req: AuthReq
 Based on the following lesson content, generate exactly ${questionCount} multiple choice questions.
 Lesson Title: ${lessonTitle || 'Programming Lesson'}
 Lesson Content:
-${lessonContent.slice(0, 3000)}
+${lessonContent.slice(0, 4000)}
 Return ONLY a valid JSON array with exactly ${questionCount} objects. Each object must have:
 - "prompt": the question text
 - "options": array of exactly 4 answer strings
 - "correctOptionIndex": number 0-3 indicating correct answer
 - "explanation": brief explanation of why that answer is correct
 Return only the JSON array, no markdown, no extra text.`;
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.GROQ_API_KEY || ''}`,
-      },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        max_tokens: 6000,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-    const data: any = await response.json();
-    if (data.error) {
-      console.error('Groq error:', data.error.message);
-      return res.status(500).json({ message: data.error.code === 'rate_limit_exceeded' ? 'AI is busy, please try again in a moment' : 'AI error' });
+    let text: string | null = null;
+    try {
+      text = await generateWithGroq(prompt, 6000);
+      if (text === null) {
+        console.log('Groq rate limited, falling back to OpenRouter');
+        text = await generateWithOpenRouter(prompt, 8000);
+      }
+    } catch (err: any) {
+      console.error('AI generation error:', err.message);
+      return res.status(500).json({ message: 'AI service unavailable, please try again' });
     }
-    const text = data.choices?.[0]?.message?.content || '';
     let questions;
     try {
-      let cleaned = text.replace(/```json|```/g, '').trim();
+      let cleaned = (text || '').replace(/```json|```/g, '').trim();
       const start = cleaned.indexOf('[');
       const end = cleaned.lastIndexOf(']');
       if (start === -1 || end === -1) throw new Error('No JSON array found');
       cleaned = cleaned.slice(start, end + 1);
       questions = JSON.parse(cleaned);
     } catch (parseErr) {
-      console.error('Quiz parse error:', parseErr, 'Raw text:', text);
+      console.error('Quiz parse error:', parseErr);
       return res.status(500).json({ message: 'Failed to parse AI response' });
     }
     return res.json({ questions, lessonTitle });
