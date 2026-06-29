@@ -113,21 +113,26 @@ Return ONLY a valid JSON array with exactly ${questionCount} objects. Each objec
 - "explanation": brief explanation of why that answer is correct
 
 Return only the JSON array, no markdown, no extra text.`;
-
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY || ''}`, {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY || ''}`,
+        'HTTP-Referer': 'https://pugi-lms.vercel.app',
+        'X-Title': 'PUGI LMS',
+      },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 8000, temperature: 0.3 },
+        model: 'meta-llama/llama-3.1-8b-instruct:free',
+        max_tokens: 8000,
+        messages: [{ role: 'user', content: prompt }],
       }),
     });
-
     const data: any = await response.json();
     if (data.error) {
-      console.error('Gemini error:', data.error.message);
+      console.error('OpenRouter error:', data.error.message);
       return res.status(500).json({ message: 'AI error: ' + data.error.message });
     }
+    const text = data.choices?.[0]?.message?.content || '';
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     let questions;
