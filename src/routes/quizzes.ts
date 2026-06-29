@@ -114,23 +114,21 @@ Return ONLY a valid JSON array with exactly ${questionCount} objects. Each objec
 
 Return only the JSON array, no markdown, no extra text.`;
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY || ''}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.GROQ_API_KEY || ''}`,
-        'Connection': 'keep-alive',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        max_tokens: 4000,
-        messages: [{ role: 'user', content: prompt }],
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 8000, temperature: 0.3 },
       }),
     });
 
     const data: any = await response.json();
-    const text = data.choices?.[0]?.message?.content || '';
-    console.error('GROQ RAW:', JSON.stringify(data).slice(0, 500));
+    if (data.error) {
+      console.error('Gemini error:', data.error.message);
+      return res.status(500).json({ message: 'AI error: ' + data.error.message });
+    }
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     let questions;
     try {
