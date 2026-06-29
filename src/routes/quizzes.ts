@@ -130,6 +130,7 @@ Return only the JSON array, no markdown, no extra text.`;
 
     const data: any = await response.json();
     const text = data.choices?.[0]?.message?.content || '';
+    console.error('GROQ RAW:', JSON.stringify(data).slice(0, 500));
 
     let questions;
     try {
