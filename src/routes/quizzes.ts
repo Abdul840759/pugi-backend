@@ -77,7 +77,6 @@ router.get('/history/me', authenticate, authorize('learner'), async (req: AuthRe
     return res.status(500).json({ message: 'Server error', error: err });
   }
 });
-// POST /api/quizzes/generate — AI quiz generator
 router.post('/generate', authenticate, authorize('learner'), async (req: AuthRequest, res: Response) => {
   try {
     const { lessonContent, lessonTitle, count } = req.body;
@@ -87,31 +86,29 @@ router.post('/generate', authenticate, authorize('learner'), async (req: AuthReq
 Based on the following lesson content, generate exactly ${questionCount} multiple choice questions.
 Lesson Title: ${lessonTitle || 'Programming Lesson'}
 Lesson Content:
-${lessonContent.slice(0, 5000)}
+${lessonContent.slice(0, 3000)}
 Return ONLY a valid JSON array with exactly ${questionCount} objects. Each object must have:
 - "prompt": the question text
 - "options": array of exactly 4 answer strings
 - "correctOptionIndex": number 0-3 indicating correct answer
 - "explanation": brief explanation of why that answer is correct
 Return only the JSON array, no markdown, no extra text.`;
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY || ''}`,
-        'HTTP-Referer': 'https://pugi-lms.vercel.app',
-        'X-Title': 'PUGI LMS',
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY || ''}`,
       },
       body: JSON.stringify({
-        model: 'openrouter/auto',
-        max_tokens: 8000,
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 6000,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
     const data: any = await response.json();
     if (data.error) {
-      console.error('OpenRouter error:', data.error.message);
-      return res.status(500).json({ message: 'AI error: ' + data.error.message });
+      console.error('Groq error:', data.error.message);
+      return res.status(500).json({ message: data.error.code === 'rate_limit_exceeded' ? 'AI is busy, please try again in a moment' : 'AI error' });
     }
     const text = data.choices?.[0]?.message?.content || '';
     let questions;
