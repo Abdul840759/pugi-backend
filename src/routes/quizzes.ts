@@ -104,7 +104,7 @@ Based on the following lesson content, generate exactly ${questionCount} multipl
 Lesson Title: ${lessonTitle || 'Programming Lesson'}
 
 Lesson Content:
-${lessonContent.slice(0, 3000)}
+${lessonContent.slice(0, 5000)}
 
 Return ONLY a valid JSON array with exactly ${questionCount} objects. Each object must have:
 - "prompt": the question text
@@ -123,7 +123,7 @@ Return only the JSON array, no markdown, no extra text.`;
       },
       body: JSON.stringify({
         model: 'llama-3.1-8b-instant',
-        max_tokens: 2000,
+        max_tokens: 4000,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
