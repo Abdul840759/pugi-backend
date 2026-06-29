@@ -77,18 +77,26 @@ router.get('/history/me', authenticate, authorize('learner'), async (req: AuthRe
     return res.status(500).json({ message: 'Server error', error: err });
   }
 });
-const generateWithGroq = async (prompt: string, maxTokens: number) => {
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY || ''}` },
-    body: JSON.stringify({ model: 'llama-3.3-70b-versatile', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
-  });
-  const data: any = await res.json();
-  if (data.error?.code === 'rate_limit_exceeded') return null;
-  if (data.error) throw new Error(data.error.message);
-  return data.choices?.[0]?.message?.content || '';
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+const generateWithGroq = async (prompt: string, maxTokens: number): Promise<string | null> => {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY || ''}` },
+      body: JSON.stringify({ model: 'llama-3.3-70b-versatile', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+    });
+    const data: any = await res.json();
+    if (data.error?.code === 'rate_limit_exceeded') {
+      console.log(`Groq rate limited, attempt ${attempt + 1}/3, waiting 5s...`);
+      await sleep(5000);
+      continue;
+    }
+    if (data.error) throw new Error(data.error.message);
+    return data.choices?.[0]?.message?.content || '';
+  }
+  return null;
 };
-const generateWithOpenRouter = async (prompt: string, maxTokens: number) => {
+const generateWithOpenRouter = async (prompt: string, maxTokens: number): Promise<string> => {
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY || ''}`, 'HTTP-Referer': 'https://pugi-lms.vercel.app', 'X-Title': 'PUGI LMS' },
